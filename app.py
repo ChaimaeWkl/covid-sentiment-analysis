@@ -22,11 +22,11 @@ from sklearn.metrics import roc_curve
 # PAGE CONFIG
 # =========================
 st.set_page_config(
-    page_title="ML for sentiment analysis: case of Covid 19",
+    page_title=" Université Chouaib Doukkali - Faculté des Sciences El Jadida",
     page_icon="🎓",
     layout="wide"
 )
-st.title("🎓 Université Chouaib Doukkali - Faculté des Sciences El Jadida")
+st.title("ML for sentiment analysis: case of Covid 19")
 
 st.subheader("Filière : Informatique Appliquée (S6)")
 st.markdown("""
