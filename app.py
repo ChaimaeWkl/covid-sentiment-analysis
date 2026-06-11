@@ -1,209 +1,256 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from textblob import TextBlob
+import plotly.express as px
+import re
+import string
+
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay
+)
+
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_curve
 
 # =========================
 # PAGE CONFIG
 # =========================
 st.set_page_config(
-    page_title="Dashboard NLP COVID-19",
-    layout="wide",
-    page_icon="🧠"
+    page_title="UCD Sentiment Dashboard",
+    page_icon="🎓",
+    layout="wide"
 )
 
-st.title("🧠 TABLEAU DE BORD NLP COVID-19")
-st.markdown("Plateforme interactive pour analyse des données et du sentiment")
+st.markdown("""
+<style>
+.main {background-color:#0f172a;color:white;}
+h1 {color:#38bdf8;text-align:center;}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🎓 Sentiment Analysis Dashboard")
+
+# =========================
+# CLEAN TEXT
+# =========================
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"@\w+", "", text)
+    text = re.sub(r"#", "", text)
+    text = re.sub(r"[%s]" % re.escape(string.punctuation), "", text)
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    return text
 
 # =========================
 # LOAD DATA
 # =========================
 @st.cache_data
-def charger_donnees():
-    return pd.read_csv("Corona_NLP_test.csv")
+def load_data():
+    df = pd.read_csv("Corona_NLP_test.csv", encoding="latin-1")
 
-df = charger_donnees()
+    mapping = {
+        "Extremely Positive": "Positive",
+        "Positive": "Positive",
+        "Neutral": "Neutral",
+        "Negative": "Negative",
+        "Extremely Negative": "Negative"
+    }
+
+    df["Sentiment"] = df["Sentiment"].map(mapping)
+    df["Clean_Tweet"] = df["OriginalTweet"].apply(clean_text)
+
+    return df
+
+df = load_data()
 
 # =========================
-# SENTIMENT FUNCTION
+# TRAIN MODEL
 # =========================
-def get_sentiment(text):
-    score = TextBlob(str(text)).sentiment.polarity
-    if score > 0:
-        return "Positif"
-    elif score < 0:
-        return "Négatif"
-    else:
-        return "Neutre"
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(df["Clean_Tweet"])
+y = df["Sentiment"]
 
-# appliquer sentiment sur une colonne texte (أول colonne object)
-text_col = df.select_dtypes(include="object").columns[0]
-df["sentiment"] = df[text_col].apply(get_sentiment)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
 
 # =========================
 # SIDEBAR
 # =========================
-st.sidebar.header("🔎 Filtres")
-
-mode = st.sidebar.radio("🎨 Mode", ["Clair", "Sombre"])
-
-if mode == "Sombre":
-    st.markdown("""
-    <style>
-    .stApp { background-color: #0e1117; color: white; }
-    </style>
-    """, unsafe_allow_html=True)
-
-recherche = st.sidebar.text_input("🔍 Rechercher un texte")
-
-colonne = st.sidebar.selectbox("Choisir une colonne", df.columns)
-
-filtre_sentiment = st.sidebar.selectbox(
-    "🧠 Filtrer par sentiment",
-    ["Tous", "Positif", "Négatif", "Neutre"]
+st.sidebar.title("⚙️ Filter")
+sent_filter = st.sidebar.selectbox(
+    "Choose Sentiment",
+    ["All", "Positive", "Neutral", "Negative"]
 )
 
-# =========================
-# FILTER DATA
-# =========================
-df_filtre = df.copy()
-
-if recherche:
-    df_filtre = df_filtre[
-        df_filtre.astype(str)
-        .apply(lambda x: x.str.contains(recherche, case=False, na=False))
-        .any(axis=1)
-    ]
-
-if filtre_sentiment != "Tous":
-    df_filtre = df_filtre[df_filtre["sentiment"] == filtre_sentiment]
-
-# =========================
-# METRICS (FIXED)
-# =========================
-sent_counts = df_filtre["sentiment"].value_counts()
-
-c1, c2, c3, c4 = st.columns(4)
-
-c1.metric("📊 Lignes", df_filtre.shape[0])
-c2.metric("📁 Colonnes", df_filtre.shape[1])
-c3.metric("🔎 Colonne", colonne)
-
-c4.metric(
-    "🧠 Sentiments",
-    int(sent_counts.sum()),
-    f"🟢 {sent_counts.get('Positif',0)} | 🔴 {sent_counts.get('Négatif',0)} | 🟡 {sent_counts.get('Neutre',0)}"
-)
-
-st.divider()
+df_view = df.copy()
+if sent_filter != "All":
+    df_view = df_view[df_view["Sentiment"] == sent_filter]
 
 # =========================
 # TABS
 # =========================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 Aperçu",
-    "📈 Analyse",
-    "☁️ Nuage de mots",
-    "⬇️ Export",
-    "🧠 IA Sentiment"
+    "📊 Data",
+    "📈 Visualization",
+    "💬 Live Test",
+    "📉 Metrics",
+    "📡 ROC"
 ])
 
 # =========================
-# TAB 1
+# TAB 1 - DATA
 # =========================
 with tab1:
-    st.subheader("Aperçu des données")
-    st.dataframe(df_filtre.head(20), use_container_width=True)
+    st.subheader("Dataset")
+    st.dataframe(df_view[["OriginalTweet", "Sentiment"]].head(20))
+
+    st.markdown("""
+### 📌 Définition :
+Ce dataset contient des tweets liés au COVID-19.
+
+Les émotions sont classées en :
+- Positif  
+- Neutre  
+- Négatif  
+""")
 
 # =========================
-# TAB 2
+# TAB 2 - VISUALIZATION
 # =========================
 with tab2:
-    st.subheader("Visualisation")
+    st.subheader("Sentiment Distribution")
 
-    if df_filtre[colonne].dtype == "object":
-        top = df_filtre[colonne].value_counts().head(10).reset_index()
-        top.columns = [colonne, "count"]
+    fig = px.pie(df_view, names="Sentiment", hole=0.4)
+    st.plotly_chart(fig, use_container_width=True)
 
-        fig = px.bar(top, x=colonne, y="count", text="count",
-                     color="count", title=f"Top valeurs de {colonne}")
-        st.plotly_chart(fig, use_container_width=True)
-
-        fig2 = px.pie(top, names=colonne, values="count",
-                      title="Répartition")
-        st.plotly_chart(fig2, use_container_width=True)
-
-    else:
-        fig = px.histogram(df_filtre, x=colonne, nbins=30,
-                           title=f"Distribution de {colonne}")
-        st.plotly_chart(fig, use_container_width=True)
+    st.markdown("""
+### 📌 Définition :
+Ce graphique montre la répartition des sentiments dans le dataset.
+""")
 
 # =========================
-# TAB 3
+# TAB 3 - LIVE TEST
 # =========================
 with tab3:
-    st.subheader("Nuage de mots")
+    st.subheader("Test du modèle")
 
-    text = " ".join(
-        df_filtre.select_dtypes(include="object")
-        .astype(str)
-        .values.flatten()
-    )
+    text = st.text_area("Entrez un texte")
 
-    wc = WordCloud(
-        width=1200,
-        height=500,
-        background_color="white",
-        colormap="viridis"
-    ).generate(text)
+    if st.button("Predict"):
+        cleaned = clean_text(text)
+        vector = vectorizer.transform([cleaned])
+        pred = model.predict(vector)[0]
+        st.success(f"Résultat : {pred}")
 
-    fig, ax = plt.subplots()
-    ax.imshow(wc, interpolation="bilinear")
-    ax.axis("off")
-    st.pyplot(fig)
+    st.markdown("""
+### 📌 Définition :
+Le modèle prédit le sentiment d’un texte en utilisant TF-IDF + Logistic Regression.
+""")
 
 # =========================
-# TAB 4
+# TAB 4 - METRICS
 # =========================
 with tab4:
-    st.subheader("Export des données")
+    st.subheader("Performance du modèle")
 
-    csv = df_filtre.to_csv(index=False).encode("utf-8")
+    acc = accuracy_score(y_test, y_pred)
+    st.metric("Accuracy", f"{acc:.2f}")
 
-    st.download_button(
-        "⬇️ Télécharger CSV",
-        data=csv,
-        file_name="donnees_filtrees.csv",
-        mime="text/csv"
+    report = classification_report(y_test, y_pred, output_dict=True)
+
+    df_metrics = pd.DataFrame({
+        "Classe": ["Negative", "Neutral", "Positive"],
+        "Precision": [
+            report["Negative"]["precision"],
+            report["Neutral"]["precision"],
+            report["Positive"]["precision"]
+        ],
+        "Recall": [
+            report["Negative"]["recall"],
+            report["Neutral"]["recall"],
+            report["Positive"]["recall"]
+        ],
+        "F1-score": [
+            report["Negative"]["f1-score"],
+            report["Neutral"]["f1-score"],
+            report["Positive"]["f1-score"]
+        ]
+    })
+
+    st.subheader("Table des scores")
+    st.dataframe(df_metrics)
+
+    df_melt = df_metrics.melt(
+        id_vars="Classe",
+        value_vars=["Precision", "Recall", "F1-score"],
+        var_name="Métrique",
+        value_name="Score"
     )
 
+    fig = px.bar(df_melt, x="Classe", y="Score", color="Métrique", barmode="group")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("""
+### 📌 Définitions :
+
+- **Précision** : qualité des prédictions positives  
+- **Rappel (Recall)** : capacité à détecter tous les vrais cas  
+- **F1-score** : équilibre entre précision et rappel  
+- **Accuracy** : taux global de bonnes prédictions  
+""")
+
+    st.subheader("Matrice de confusion")
+
+    cm = confusion_matrix(y_test, y_pred, labels=model.classes_)
+
+    fig, ax = plt.subplots()
+    ConfusionMatrixDisplay(cm, display_labels=model.classes_).plot(ax=ax, cmap="Blues")
+
+    st.pyplot(fig)
+
+    st.markdown("""
+### 📌 Définition :
+La matrice de confusion montre les bonnes et mauvaises prédictions.
+""")
+
 # =========================
-# TAB 5
+# TAB 5 - ROC
 # =========================
 with tab5:
-    st.subheader("🧠 Analyse de sentiment IA")
+    st.subheader("Courbe ROC")
 
-    texte = st.text_area("✍️ Écris ton texte")
+    classes = model.classes_
 
-    if st.button("🔍 Analyser"):
-        if texte.strip() == "":
-            st.warning("Veuillez entrer un texte")
-        else:
-            score = TextBlob(texte).sentiment.polarity
+    y_bin = label_binarize(y_test, classes=classes)
+    y_score = model.predict_proba(X_test)
 
-            if score > 0:
-                st.success("🟢 POSITIF")
-            elif score < 0:
-                st.error("🔴 NÉGATIF")
-            else:
-                st.info("🟡 NEUTRE")
+    plt.figure()
 
-            st.metric("Score", round(score, 2))
+    for i in range(len(classes)):
+        fpr, tpr, _ = roc_curve(y_bin[:, i], y_score[:, i])
+        plt.plot(fpr, tpr, label=classes[i])
 
-# =========================
-# FOOTER
-# =========================
-st.markdown("---")
-st.markdown("🚀 Projet NLP COVID-19 | Dashboard Professionnel Streamlit")
+    plt.plot([0, 1], [0, 1], "--")
+    plt.legend()
+    plt.title("ROC Curve")
+
+    st.pyplot(plt)
+
+    st.markdown("""
+### 📌 Définition :
+La courbe ROC mesure la capacité du modèle à distinguer les classes.
+Plus elle est proche du coin supérieur gauche, meilleur est le modèle.
+""")
