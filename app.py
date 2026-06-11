@@ -38,6 +38,7 @@ st.subheader("Filière : Informatique Appliquée (S6)")
 
 st.markdown("""
 <style>
+
 .main {
     background-color:#0f172a;
     color:white;
@@ -51,6 +52,7 @@ h1 {
 .stTabs [data-baseweb="tab"] {
     font-size:16px;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -147,6 +149,7 @@ sent_filter = st.sidebar.selectbox(
 df_view = df.copy()
 
 if sent_filter != "All":
+
     df_view = df_view[
         df_view["Sentiment"] == sent_filter
     ]
@@ -192,6 +195,9 @@ Les émotions sont classées en :
 # =========================
 with tab2:
 
+    # =====================
+    # PIE CHART
+    # =====================
     st.subheader("Sentiment Distribution")
 
     fig = px.pie(
@@ -216,42 +222,38 @@ Ce graphique montre la répartition des sentiments dans le dataset.
     # =====================
     st.subheader("Most Repeated Words by Sentiment")
 
-    sentiments = [
-        "Positive",
-        "Neutral",
-        "Negative"
-    ]
+    selected_sentiment = st.selectbox(
+        "Choose Sentiment for WordCloud",
+        ["Positive", "Neutral", "Negative"]
+    )
 
-    for sentiment in sentiments:
+    text_data = " ".join(
+        df[
+            df["Sentiment"] == selected_sentiment
+        ]["Clean_Tweet"]
+    )
 
-        st.markdown(f"## {sentiment} Tweets")
+    wordcloud = WordCloud(
+        width=800,
+        height=400,
+        background_color="black",
+        colormap="cool"
+    ).generate(text_data)
 
-        text_data = " ".join(
-            df[
-                df["Sentiment"] == sentiment
-            ]["Clean_Tweet"]
-        )
+    fig_wc, ax = plt.subplots(figsize=(10, 5))
 
-        wordcloud = WordCloud(
-            width=800,
-            height=400,
-            background_color="black",
-            colormap="cool"
-        ).generate(text_data)
+    ax.imshow(
+        wordcloud,
+        interpolation="bilinear"
+    )
 
-        fig_wc, ax = plt.subplots(figsize=(10, 5))
+    ax.axis("off")
 
-        ax.imshow(
-            wordcloud,
-            interpolation="bilinear"
-        )
+    st.pyplot(fig_wc)
 
-        ax.axis("off")
+    st.markdown(f"""
+📌 Cette image montre les mots les plus fréquents dans les tweets **{selected_sentiment}**.
 
-        st.pyplot(fig_wc)
-
-        st.markdown(f"""
-📌 Cette image montre les mots les plus fréquents dans les tweets **{sentiment}**.
 Les mots les plus grands sont les plus répétés.
 """)
 
