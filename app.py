@@ -22,11 +22,13 @@ from sklearn.metrics import roc_curve
 # PAGE CONFIG
 # =========================
 st.set_page_config(
-    page_title="UCD Sentiment Dashboard",
+    page_title="ML for sentiment analysis: case of Covid 19",
     page_icon="🎓",
     layout="wide"
 )
+st.title("🎓 Université Chouaib Doukkali - Faculté des Sciences El Jadida")
 
+st.subheader("Filière : Informatique Appliquée (S6)")
 st.markdown("""
 <style>
 .main {background-color:#0f172a;color:white;}
