@@ -36,7 +36,7 @@ h1 {color:#38bdf8;text-align:center;}
 </style>
 """, unsafe_allow_html=True)
 
-st.makdown("Réalisée par : Wakil Chaimae , Stebba Houda ")
+st.markdown("Réalisée par : Wakil Chaimae , Stebba Houda ")
 # =========================
 # CLEAN TEXT
 # =========================
